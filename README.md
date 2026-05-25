@@ -76,7 +76,63 @@ llm-vuln-checker scan \
   --api-key-env "MY_LLM_API_KEY"
 ```
 
-### 2. 离线审计日志
+### 2. 扫描 DeepSeek V4 接口
+
+DeepSeek API 兼容 OpenAI Chat Completions 格式。工具内置了 DeepSeek 预设，默认使用：
+
+- Endpoint：`https://api.deepseek.com/chat/completions`
+- API Key 环境变量：`DEEPSEEK_API_KEY`
+- 默认模型：`deepseek-v4-flash`
+
+设置 API Key：
+
+```bash
+export DEEPSEEK_API_KEY="你的 DeepSeek API Key"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:DEEPSEEK_API_KEY="你的 DeepSeek API Key"
+```
+
+运行 DeepSeek V4 检查：
+
+```bash
+llm-vuln-checker scan \
+  --provider deepseek \
+  --model deepseek-v4-flash \
+  --format markdown \
+  --output reports/deepseek-v4-report.md
+```
+
+如果要检查 Pro 模型：
+
+```bash
+llm-vuln-checker scan \
+  --provider deepseek \
+  --model deepseek-v4-pro
+```
+
+默认会关闭 DeepSeek V4 的 thinking 模式，以便得到更稳定、便于判定的安全检查输出。如果你想保留推理模式：
+
+```bash
+llm-vuln-checker scan \
+  --provider deepseek \
+  --model deepseek-v4-pro \
+  --deepseek-thinking enabled
+```
+
+也可以手动覆盖 endpoint：
+
+```bash
+llm-vuln-checker scan \
+  --provider deepseek \
+  --endpoint "https://api.deepseek.com/chat/completions" \
+  --model deepseek-v4-flash
+```
+
+### 3. 离线审计日志
 
 日志使用 JSONL，每行一个对象，至少包含 `response` 字段；如果包含 `rule_id`，工具会只按对应规则审计。
 
