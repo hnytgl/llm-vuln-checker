@@ -98,6 +98,7 @@ def openai_chat_completion(
     prompt: str,
     timeout: int = 60,
     extra_headers: dict[str, str] | None = None,
+    extra_body: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "model": model,
@@ -107,6 +108,8 @@ def openai_chat_completion(
         ],
         "temperature": 0,
     }
+    if extra_body:
+        payload.update(extra_body)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -128,12 +131,27 @@ def openai_chat_completion(
         raise ValueError(f"Unexpected chat completion response: {data}") from exc
 
 
-def scan_endpoint(endpoint: str, api_key: str, model: str, rules: Iterable[Rule], timeout: int = 60) -> list[Finding]:
+def scan_endpoint(
+    endpoint: str,
+    api_key: str,
+    model: str,
+    rules: Iterable[Rule],
+    timeout: int = 60,
+    extra_body: dict[str, Any] | None = None,
+) -> list[Finding]:
     findings: list[Finding] = []
     for rule in rules:
         start = time.perf_counter()
         try:
-            response = openai_chat_completion(endpoint, api_key, model, rule.system, rule.prompt, timeout=timeout)
+            response = openai_chat_completion(
+                endpoint,
+                api_key,
+                model,
+                rule.system,
+                rule.prompt,
+                timeout=timeout,
+                extra_body=extra_body,
+            )
             latency_ms = int((time.perf_counter() - start) * 1000)
             findings.append(evaluate_response(rule, response, latency_ms=latency_ms))
         except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
