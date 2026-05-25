@@ -10,6 +10,10 @@ from . import __version__
 from .core import audit_transcript, findings_to_json, findings_to_markdown, load_rules, scan_endpoint
 
 
+DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="llm-vuln-checker",
@@ -26,9 +30,21 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--rules", default=argparse.SUPPRESS, help="自定义规则 JSON 文件路径。")
     scan.add_argument("--format", choices=["json", "markdown"], default=argparse.SUPPRESS, help="报告格式。")
     scan.add_argument("--output", "-o", default=argparse.SUPPRESS, help="报告输出路径；默认输出到终端。")
-    scan.add_argument("--endpoint", required=True, help="Chat Completions 兼容接口，例如 https://api.example.com/v1/chat/completions")
-    scan.add_argument("--model", required=True, help="要检查的模型名。")
+    scan.add_argument(
+        "--provider",
+        choices=["openai-compatible", "deepseek"],
+        default="openai-compatible",
+        help="接口预设；deepseek 会自动使用 DeepSeek Chat Completions 地址。",
+    )
+    scan.add_argument("--endpoint", help="Chat Completions 兼容接口，例如 https://api.example.com/v1/chat/completions")
+    scan.add_argument("--model", help=f"要检查的模型名；DeepSeek 默认 {DEEPSEEK_DEFAULT_MODEL}。")
     scan.add_argument("--api-key-env", default="OPENAI_API_KEY", help="保存 API Key 的环境变量名。")
+    scan.add_argument(
+        "--deepseek-thinking",
+        choices=["enabled", "disabled"],
+        default="disabled",
+        help="DeepSeek V4 推理模式；默认 disabled，便于得到更稳定的安全检查输出。",
+    )
     scan.add_argument("--timeout", type=int, default=60, help="单条规则请求超时时间，单位秒。")
 
     audit = subparsers.add_parser("audit-transcript", help="离线审计 JSONL 格式的 prompt/response 日志。")
@@ -70,10 +86,22 @@ def main(argv: list[str] | None = None) -> int:
     rules = load_rules(args.rules)
 
     if args.command == "scan":
+        endpoint = args.endpoint
+        model = args.model
+        extra_body = None
+        if args.provider == "deepseek":
+            endpoint = endpoint or DEEPSEEK_ENDPOINT
+            model = model or DEEPSEEK_DEFAULT_MODEL
+            if args.api_key_env == "OPENAI_API_KEY":
+                args.api_key_env = "DEEPSEEK_API_KEY"
+            extra_body = {"thinking": {"type": args.deepseek_thinking}}
+        elif not endpoint or not model:
+            parser.error("使用 openai-compatible provider 时必须同时提供 --endpoint 和 --model。")
+
         api_key = os.getenv(args.api_key_env)
         if not api_key:
             parser.error(f"环境变量 {args.api_key_env} 未设置。")
-        findings = scan_endpoint(args.endpoint, api_key, args.model, rules, timeout=args.timeout)
+        findings = scan_endpoint(endpoint, api_key, model, rules, timeout=args.timeout, extra_body=extra_body)
     elif args.command == "audit-transcript":
         findings = audit_transcript(read_jsonl(args.path), rules)
     else:
